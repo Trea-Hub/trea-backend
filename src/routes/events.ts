@@ -48,5 +48,38 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+router.get('/:id/attendees', async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const organizer = req.header('x-user-address');
+
+    if (!organizer) {
+      res.status(401).json({ error: 'Unauthorized: Missing x-user-address header' });
+      return;
+    }
+
+    const eventResult = await pool.query('SELECT organizer FROM events WHERE id = $1', [eventId]);
+    if (eventResult.rows.length === 0) {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
+    const event = eventResult.rows[0];
+    if (event.organizer !== organizer) {
+      res.status(403).json({ error: 'Forbidden: Only the organizer can view attendees' });
+      return;
+    }
+
+    const registrationsResult = await pool.query(
+      'SELECT attendee_address, paid_amount, check_in_status FROM registrations WHERE event_id = $1',
+      [eventId]
+    );
+
+    res.json({ attendees: registrationsResult.rows });
+  } catch (err) {
+    console.error('Error fetching attendees:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 export default router;
