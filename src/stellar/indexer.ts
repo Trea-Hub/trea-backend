@@ -69,6 +69,18 @@ export async function processEvents(events: rpc.Api.EventResponse[]) {
           );
           console.log(`[Indexer] Refunded attendee ${attendee} for event ${eventId}`);
         }
+      } else if (topic0 === 'check_in') {
+        const topic1Val = event.topic[1];
+        const eventId = scValToNative(topic1Val);
+
+        const valueVal = event.value;
+        const attendee = scValToNative(valueVal);
+
+        await pool.query(
+          `UPDATE registrations SET checked_in = true WHERE event_id = $1 AND attendee_address = $2`,
+          [eventId, attendee]
+        );
+        console.log(`[Indexer] Checked in attendee ${attendee} for event ${eventId}`);
       }
     } catch (err) {
       console.error(`[Indexer] Failed to parse event:`, err);

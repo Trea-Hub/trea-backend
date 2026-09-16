@@ -154,7 +154,31 @@ describe('Indexer - processEvents', () => {
     expect(pool.query).toHaveBeenCalledTimes(1);
   });
 
-  it('should ignore contract events that are not create_event, register, or refund', async () => {
+  it('should process check_in event and update db', async () => {
+    const mockEvent = {
+      type: 'contract',
+      topic: ['check_in', 'event-12345'],
+      value: 'G_ATTENDEE_ADDR',
+      ledger: 100,
+      contractId: 'C...',
+      id: '000100-00',
+      pagingToken: '000100-00',
+      txHash: 'txhash',
+      inSuccessfulContractCall: true
+    } as any;
+
+    (pool.query as jest.Mock).mockResolvedValueOnce({});
+
+    await processEvents([mockEvent]);
+
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE registrations SET checked_in = true'),
+      expect.arrayContaining(['event-12345', 'G_ATTENDEE_ADDR'])
+    );
+  });
+
+  it('should ignore contract events that are not create_event, register, refund, or check_in', async () => {
     const mockEvent = {
       type: 'contract',
       topic: ['other_event'],
