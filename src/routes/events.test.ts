@@ -85,4 +85,49 @@ describe('GET /events', () => {
       ['music', true, '%festival%']
     );
   });
+
+  describe('GET /events/:id/attendees', () => {
+    it('should return 401 if x-user-address header is missing', async () => {
+      const res = await request(app).get('/events/123/attendees');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toMatch(/Missing x-user-address header/);
+    });
+
+    it('should return 404 if event is not found', async () => {
+      (pool.query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .get('/events/123/attendees')
+        .set('x-user-address', 'G_ORGANIZER');
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toMatch(/Event not found/);
+    });
+
+    it('should return 403 if requester is not the organizer', async () => {
+      (pool.query as jest.Mock).mockResolvedValueOnce({ rows: [{ organizer: 'G_REAL_ORGANIZER' }] });
+
+      const res = await request(app)
+        .get('/events/123/attendees')
+        .set('x-user-address', 'G_FAKE_ORGANIZER');
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/Only the organizer can view attendees/);
+    });
+
+    it('should return attendees if requester is the organizer', async () => {
+      (pool.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ organizer: 'G_ORGANIZER' }] })
+        .mockResolvedValueOnce({ rows: [{ attendee_address: 'G_ATTENDEE', paid_amount: '100', check_in_status: true }] });
+
+      const res = await request(app)
+        .get('/events/123/attendees')
+        .set('x-user-address', 'G_ORGANIZER');
+
+      expect(res.status).toBe(200);
+      expect(res.body.attendees).toEqual([
+        { attendee_address: 'G_ATTENDEE', paid_amount: '100', check_in_status: true },
+      ]);
+    });
+  });
 });
