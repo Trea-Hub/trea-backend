@@ -110,7 +110,51 @@ describe('Indexer - processEvents', () => {
     expect(pool.query).toHaveBeenCalledTimes(1);
   });
 
-  it('should ignore contract events that are not create_event', async () => {
+  it('should process refund event and delete from db', async () => {
+    const mockEvent = {
+      type: 'contract',
+      topic: ['refund', 'event-12345'],
+      value: 'G_ATTENDEE_ADDR',
+      ledger: 100,
+      contractId: 'C...',
+      id: '000100-00',
+      pagingToken: '000100-00',
+      txHash: 'txhash',
+      inSuccessfulContractCall: true
+    } as any;
+
+    (pool.query as jest.Mock).mockResolvedValueOnce({ rowCount: 1 }).mockResolvedValueOnce({});
+
+    await processEvents([mockEvent]);
+
+    expect(pool.query).toHaveBeenCalledTimes(2);
+    expect(pool.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('DELETE FROM registrations'),
+      expect.arrayContaining(['event-12345', 'G_ATTENDEE_ADDR'])
+    );
+    expect(pool.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('UPDATE events SET registered_count = registered_count - 1'),
+      expect.arrayContaining(['event-12345'])
+    );
+  });
+
+  it('should not decrement registered_count if refund registration does not exist', async () => {
+    const mockEvent = {
+      type: 'contract',
+      topic: ['refund', 'event-12345'],
+      value: 'G_ATTENDEE_ADDR',
+    } as any;
+
+    (pool.query as jest.Mock).mockResolvedValueOnce({ rowCount: 0 });
+
+    await processEvents([mockEvent]);
+
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('should ignore contract events that are not create_event, register, or refund', async () => {
     const mockEvent = {
       type: 'contract',
       topic: ['other_event'],
