@@ -66,6 +66,50 @@ describe('Indexer - processEvents', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
+  it('should process register event and insert into db', async () => {
+    const mockEvent = {
+      type: 'contract',
+      topic: ['register', 'event-12345'],
+      value: 'G_ATTENDEE_ADDR',
+      ledger: 100,
+      contractId: 'C...',
+      id: '000100-00',
+      pagingToken: '000100-00',
+      txHash: 'txhash',
+      inSuccessfulContractCall: true
+    } as any;
+
+    (pool.query as jest.Mock).mockResolvedValueOnce({ rowCount: 1 }).mockResolvedValueOnce({});
+
+    await processEvents([mockEvent]);
+
+    expect(pool.query).toHaveBeenCalledTimes(2);
+    expect(pool.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('INSERT INTO registrations'),
+      expect.arrayContaining(['event-12345', 'G_ATTENDEE_ADDR'])
+    );
+    expect(pool.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('UPDATE events SET registered_count'),
+      expect.arrayContaining(['event-12345'])
+    );
+  });
+
+  it('should not increment registered_count if registration already exists', async () => {
+    const mockEvent = {
+      type: 'contract',
+      topic: ['register', 'event-12345'],
+      value: 'G_ATTENDEE_ADDR',
+    } as any;
+
+    (pool.query as jest.Mock).mockResolvedValueOnce({ rowCount: 0 });
+
+    await processEvents([mockEvent]);
+
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
   it('should ignore contract events that are not create_event', async () => {
     const mockEvent = {
       type: 'contract',

@@ -28,6 +28,28 @@ export async function processEvents(events: rpc.Api.EventResponse[]) {
           [eventId, organizer, 'Placeholder', 'Placeholder', 'Placeholder', true, '{}']
         );
         console.log(`[Indexer] Created placeholder event ${eventId} for organizer ${organizer}`);
+      } else if (topic0 === 'register') {
+        const topic1Val = event.topic[1];
+        const eventId = scValToNative(topic1Val);
+
+        const valueVal = event.value;
+        const attendee = scValToNative(valueVal);
+
+        const result = await pool.query(
+          `INSERT INTO registrations (event_id, attendee_address)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING
+           RETURNING event_id`,
+          [eventId, attendee]
+        );
+
+        if (result.rowCount && result.rowCount > 0) {
+          await pool.query(
+            `UPDATE events SET registered_count = registered_count + 1 WHERE id = $1`,
+            [eventId]
+          );
+          console.log(`[Indexer] Registered attendee ${attendee} for event ${eventId}`);
+        }
       }
     } catch (err) {
       console.error(`[Indexer] Failed to parse event:`, err);
