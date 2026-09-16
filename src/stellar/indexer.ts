@@ -1,11 +1,46 @@
-import { rpc } from '@stellar/stellar-sdk';
+import { rpc, xdr, scValToNative } from '@stellar/stellar-sdk';
 import { pool } from '../db/client';
 
 const SOROBAN_RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-const server = new rpc.Server(SOROBAN_RPC_URL);
+export const CONTRACT_ID = process.env.CONTRACT_ID || '';
 
-async function pollEvents() {
+export const server = new rpc.Server(SOROBAN_RPC_URL);
+
+export async function processEvents(events: rpc.Api.EventResponse[]) {
+  for (const event of events) {
+    if (event.type !== 'contract') continue;
+
+    try {
+      const topic0Val = event.topic[0];
+      const topic0 = scValToNative(topic0Val);
+
+      if (topic0 === 'create_event') {
+        const topic1Val = event.topic[1];
+        const eventId = scValToNative(topic1Val);
+
+        const valueVal = event.value;
+        const organizer = scValToNative(valueVal);
+
+        await pool.query(
+          `INSERT INTO events (id, organizer, title, description, location, date, is_free, tags)
+           VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7)
+           ON CONFLICT (id) DO NOTHING`,
+          [eventId, organizer, 'Placeholder', 'Placeholder', 'Placeholder', true, '{}']
+        );
+        console.log(`[Indexer] Created placeholder event ${eventId} for organizer ${organizer}`);
+      }
+    } catch (err) {
+      console.error(`[Indexer] Failed to parse event:`, err);
+    }
+  }
+}
+
+export async function pollEvents() {
   console.log(`[Indexer] Starting indexer service... connected to ${SOROBAN_RPC_URL}`);
+
+  if (!CONTRACT_ID) {
+    console.warn('[Indexer] WARNING: CONTRACT_ID is not set in environment variables. Indexer will not filter by contract ID.');
+  }
 
   let lastLedger = 0;
   
@@ -21,8 +56,19 @@ async function pollEvents() {
       if (currentLedger > lastLedger) {
         console.log(`[Indexer] Processing batch from ledger ${lastLedger} to ${currentLedger}`);
         
-        // TODO: In subsequent issues, we will fetch and parse events here
-        // e.g. await server.getEvents({ startLedger: lastLedger, filters: [...] });
+        const eventsResponse = await server.getEvents({
+          startLedger: lastLedger,
+          filters: [
+            {
+              type: 'contract',
+              contractIds: CONTRACT_ID ? [CONTRACT_ID] : [],
+            },
+          ],
+        });
+
+        if (eventsResponse.events && eventsResponse.events.length > 0) {
+          await processEvents(eventsResponse.events);
+        }
         
         lastLedger = currentLedger;
       }
