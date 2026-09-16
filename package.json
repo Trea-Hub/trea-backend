@@ -6,7 +6,8 @@
   "scripts": {
     "test": "jest",
     "migrate": "node-pg-migrate -m src/db/migrations",
-    "migrate:create": "node-pg-migrate -m src/db/migrations create"
+    "migrate:create": "node-pg-migrate -m src/db/migrations create",
+    "indexer": "ts-node src/stellar/indexer.ts"
   },
   "keywords": [],
   "author": "",
