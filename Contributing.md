@@ -31,6 +31,9 @@ git clone https://github.com/<org>/trea-backend.git
 cd trea-backend
 npm install
 cp .env.example .env
+# Ensure Postgres is running and create the database, then run migrations:
+# createdb trea
+npm run migrate
 npm run dev
 ```
 
