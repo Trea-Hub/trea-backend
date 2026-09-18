@@ -50,6 +50,25 @@ export async function processEvents(events: rpc.Api.EventResponse[]) {
           );
           console.log(`[Indexer] Registered attendee ${attendee} for event ${eventId}`);
         }
+      } else if (topic0 === 'refund') {
+        const topic1Val = event.topic[1];
+        const eventId = scValToNative(topic1Val);
+
+        const valueVal = event.value;
+        const attendee = scValToNative(valueVal);
+
+        const result = await pool.query(
+          `DELETE FROM registrations WHERE event_id = $1 AND attendee_address = $2 RETURNING event_id`,
+          [eventId, attendee]
+        );
+
+        if (result.rowCount && result.rowCount > 0) {
+          await pool.query(
+            `UPDATE events SET registered_count = registered_count - 1 WHERE id = $1`,
+            [eventId]
+          );
+          console.log(`[Indexer] Refunded attendee ${attendee} for event ${eventId}`);
+        }
       }
     } catch (err) {
       console.error(`[Indexer] Failed to parse event:`, err);
